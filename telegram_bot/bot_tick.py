@@ -74,21 +74,27 @@ def run_tick():
     now = time.time()
 
     if now - state["last_analysis_ts"] >= ANALYSIS_INTERVAL_SECONDS:
-        analysis = generate_hourly_analysis(rsi, dxy)
-        rsi_line = f" | RSI : {rsi}" if rsi else ""
-        dxy_line = f" | DXY : {dxy:.2f}" if dxy else ""
-        send_telegram_message(
-            f"🤖 Analyse horaire — Or/XAUUSD\n"
-            f"Prix : {spot_price:,.0f} ${rsi_line}{dxy_line}\n\n{analysis}"
-        )
-        state["last_analysis_ts"] = now
-        print(f"Analyse horaire envoyée. RSI={rsi}, DXY={dxy}")
+        try:
+            analysis = generate_hourly_analysis(rsi, dxy)
+            rsi_line = f" | RSI : {rsi}" if rsi else ""
+            dxy_line = f" | DXY : {dxy:.2f}" if dxy else ""
+            send_telegram_message(
+                f"🤖 Analyse horaire — Or/XAUUSD\n"
+                f"Prix : {spot_price:,.0f} ${rsi_line}{dxy_line}\n\n{analysis}"
+            )
+            state["last_analysis_ts"] = now
+            print(f"Analyse horaire envoyée. RSI={rsi}, DXY={dxy}")
+        except Exception as e:
+            print(f"Analyse horaire ignorée (Gemini indisponible) : {e}")
 
     if now - state["last_daily_ts"] >= DAILY_LEVELS_INTERVAL_SECONDS:
-        daily = generate_daily_levels()
-        send_telegram_message(f"📅 {daily}")
-        state["last_daily_ts"] = now
-        print("Niveaux du jour envoyés.")
+        try:
+            daily = generate_daily_levels()
+            send_telegram_message(f"📅 {daily}")
+            state["last_daily_ts"] = now
+            print("Niveaux du jour envoyés.")
+        except Exception as e:
+            print(f"Niveaux du jour ignorés (Gemini indisponible) : {e}")
 
     save_state(state)
     print(f"Tick OK. Or : {spot_price:.0f} $ | RSI : {rsi} | DXY : {dxy}")
