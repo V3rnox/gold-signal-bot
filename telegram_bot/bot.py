@@ -80,8 +80,17 @@ Contexte stratégie Or/XAUUSD (SMC + intermarché) :
   * Volume : une cassure avec fort volume augmente la fiabilité
 """
 
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+_gemini_client = None
 _YF_HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+
+def get_gemini_client():
+    global _gemini_client
+    if _gemini_client is None:
+        if not GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY manquant — vérifie les secrets GitHub")
+        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+    return _gemini_client
 
 
 # ---------------------------------------------------------------------------
@@ -263,7 +272,7 @@ Rédige une mise à jour courte (max 120 mots) pour un canal Telegram de trading
 - Quoi surveiller ensuite
 Termine toujours par : "Analyse technique automatisée, pas un conseil financier."
 """
-    response = gemini_client.models.generate_content(model=ANALYSIS_MODEL, contents=prompt)
+    response = get_gemini_client().models.generate_content(model=ANALYSIS_MODEL, contents=prompt)
     return response.text
 
 
@@ -295,7 +304,7 @@ Biais : [direction + explication]
 
 Termine par : "Analyse automatisée, pas un conseil financier."
 """
-    response = gemini_client.models.generate_content(model=ANALYSIS_MODEL, contents=prompt)
+    response = get_gemini_client().models.generate_content(model=ANALYSIS_MODEL, contents=prompt)
     return response.text
 
 
