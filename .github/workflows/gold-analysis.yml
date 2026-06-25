@@ -1,17 +1,15 @@
-name: Gold — Alertes niveaux (toutes les 5 min)
+name: Gold — Analyse horaire (toutes les heures)
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
-  alertes:
+  analyse:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
@@ -20,18 +18,10 @@ jobs:
       - name: Installer les dépendances
         run: pip install -r telegram_bot/requirements.txt
 
-      - name: Vérifier les niveaux
+      - name: Envoyer l'analyse horaire
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM }}
           GEMINI_API_KEY: ${{ secrets.GEMINI }}
           TELEGRAM_CHANNEL: "@btc_signal_confirme_2026"
           ANALYSIS_MODEL: "gemini-2.5-flash-lite"
-        run: python telegram_bot/alerts_tick.py
-
-      - name: Sauvegarder l'état
-        run: |
-          git config user.email "bot@github.com"
-          git config user.name "Gold Bot"
-          git add telegram_bot/state.json
-          git diff --staged --quiet || git commit -m "chore: update bot state [skip ci]"
-          git push
+        run: python telegram_bot/analysis_tick.py
