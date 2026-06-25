@@ -117,18 +117,29 @@ def run_tick():
 
     # --- Analyse horaire ---
     if now - state["last_analysis_ts"] >= ANALYSIS_INTERVAL_SECONDS:
+        rsi_line = f" | RSI : {rsi}" if rsi else ""
+        h4_line = f" | H4 : {h4_bias}" if h4_bias else ""
+        ema_line = f" | EMA50 : {ema50:.0f}" if ema50 else ""
+        header = (
+            f"📊 Or/XAUUSD — {spot_price:,.0f} ${rsi_line}{h4_line}{ema_line}\n"
+            f"DXY : {dxy:.2f}" if dxy else f"📊 Or/XAUUSD — {spot_price:,.0f} ${rsi_line}{h4_line}{ema_line}"
+        )
         try:
             analysis = generate_hourly_analysis(rsi, dxy, ema50, h4_bias, fib)
-            rsi_line = f" | RSI : {rsi}" if rsi else ""
-            h4_line = f" | H4 : {h4_bias}" if h4_bias else ""
-            send_telegram_message(
-                f"🤖 Analyse horaire — Or/XAUUSD\n"
-                f"Prix : {spot_price:,.0f} ${rsi_line}{h4_line}\n\n{analysis}"
-            )
-            state["last_analysis_ts"] = now
+            send_telegram_message(f"🤖 Analyse horaire — Or/XAUUSD\n{header}\n\n{analysis}")
             print("Analyse horaire envoyée.")
         except Exception as e:
-            print(f"Analyse horaire ignorée (Gemini indisponible) : {e}")
+            # Gemini indispo : on envoie quand même le statut du marché
+            fib_line = f"\nFib 0.618 : {fib['fib_618']:.0f} $ | Fib 0.786 : {fib['fib_786']:.0f} $" if fib else ""
+            send_telegram_message(
+                f"📊 Statut horaire — Or/XAUUSD\n"
+                f"{header}{fib_line}\n\n"
+                f"Niveaux à surveiller :\n"
+                f"⛔ SHORT < 3 959 $ | ✅ LONG > 4 115 $\n\n"
+                f"Analyse IA indisponible temporairement."
+            )
+            print(f"Statut horaire envoyé (Gemini KO : {e})")
+        state["last_analysis_ts"] = now
 
     # --- Niveaux du jour ---
     if now - state["last_daily_ts"] >= DAILY_LEVELS_INTERVAL_SECONDS:
