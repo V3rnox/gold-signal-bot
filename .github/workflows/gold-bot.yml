@@ -34,8 +34,8 @@ jobs:
 
       - name: Exécuter le bot
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI }}
           TELEGRAM_CHANNEL: "@btc_signal_confirme_2026"
           ANALYSIS_MODEL: "gemini-2.5-flash-lite"
         run: python telegram_bot/bot_tick.py
