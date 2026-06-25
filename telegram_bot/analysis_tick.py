@@ -1,5 +1,6 @@
 """
-Analyse horaire complète — publiée toutes les heures sur le canal Telegram.
+Analyse horaire — publiée toutes les heures sur le canal.
+Format structuré : structure, indicateurs, scénarios, confluence, à surveiller.
 """
 import sys
 from pathlib import Path
@@ -15,97 +16,106 @@ from bot import (
 )
 
 
-def build_analysis_prompt(spot, rsi, ema50, h4_bias, fib, dxy, h1_candles, h4_candles, daily_candles):
-    h1_text = "\n".join(
-        f"  {datetime.utcfromtimestamp(c['time']).strftime('%H:%M')} — "
+def build_prompt(spot, rsi, ema50, h4_bias, fib, dxy, h1_candles, h4_candles):
+    h1_recent = "\n".join(
+        f"  {datetime.utcfromtimestamp(c['time']).strftime('%H:%M')} "
         f"O={c['open']:.0f} H={c['high']:.0f} L={c['low']:.0f} C={c['close']:.0f}"
-        for c in h1_candles[-6:]
+        for c in h1_candles[-8:]
     )
-    h4_text = "\n".join(
+    h4_recent = "\n".join(
         f"  O={c['open']:.0f} H={c['high']:.0f} L={c['low']:.0f} C={c['close']:.0f}"
         for c in h4_candles[-4:]
     )
-    daily_text = "\n".join(
-        f"  {c['date']} — O={c['open']:.0f} H={c['high']:.0f} L={c['low']:.0f} C={c['close']:.0f}"
-        for c in daily_candles[-3:]
-    )
-
+    ema_pos = "AU-DESSUS" if ema50 and spot > ema50 else "EN-DESSOUS"
     fib_block = ""
     if fib:
-        fib_block = f"""
-Niveaux Fibonacci (swing {fib['high']:.0f} → {fib['low']:.0f}) :
-  0.382 = {fib['fib_382']:.0f} $ | 0.500 = {fib['fib_500']:.0f} $ | 0.618 = {fib['fib_618']:.0f} $ | 0.786 = {fib['fib_786']:.0f} $
-"""
+        fib_block = f"Fibonacci : 0.382={fib['fib_382']:.0f} | 0.500={fib['fib_500']:.0f} | 0.618={fib['fib_618']:.0f} | 0.786={fib['fib_786']:.0f}"
 
-    return f"""Tu es un analyste senior spécialisé dans le trading de l'Or (XAUUSD), expert en SMC (Smart Money Concepts), VSA (Volume Spread Analysis) et analyse intermarché.
+    return f"""Tu es un analyste senior en trading de l'Or (XAUUSD), expert SMC et intermarché.
+Tu gères un canal Telegram de trading. Chaque heure tu publies une analyse claire, utile et pédagogique.
 
-Tu gères un canal Telegram de trading dont la communauté suit activement le marché de l'Or. Chaque heure, tu publies une analyse complète pour aider les membres à comprendre la situation et les scénarios possibles.
+DONNÉES ACTUELLES :
+- Prix : {spot:,.0f} $
+- Heure UTC : {datetime.utcnow().strftime('%Hh%M')}
+- RSI(14) H1 : {rsi if rsi else 'N/D'}
+- EMA50 H1 : {f'{ema50:.0f} $ (prix {ema_pos})' if ema50 else 'N/D'}
+- Biais H4 : {h4_bias if h4_bias else 'N/D'}
+- DXY : {f'{dxy:.2f}' if dxy else 'N/D'}
+- {fib_block}
 
---- DONNÉES DU MARCHÉ ---
-
-Prix actuel : {spot:,.0f} $
-Heure UTC : {datetime.utcnow().strftime('%H:%M')}
-
-Indicateurs H1 :
-  RSI(14) = {rsi if rsi else 'N/D'}
-  EMA50 = {f'{ema50:.0f}' if ema50 else 'N/D'} $ (prix {'AU-DESSUS' if ema50 and spot > ema50 else 'EN-DESSOUS'})
-  Biais H4 (EMA20 H4) = {h4_bias if h4_bias else 'N/D'}
-  DXY = {f'{dxy:.2f}' if dxy else 'N/D'} (corrélation inverse avec l'Or)
-{fib_block}
 Niveaux SMC clés :
-  PDH (haut d'hier) = 4 115 $ → confirmation LONG si clôture H1 au-dessus
-  PDL (bas d'hier)  = 3 959 $ → confirmation SHORT si clôture H1 en-dessous
-  SL LONG = 3 970 $ | Objectifs : 4 250 $ puis 4 405 $
-  SL SHORT = 4 015 $ | Objectifs : 3 900 $ puis 3 847 $
+- PDH (résistance) = 4 115 $ → LONG confirmé si clôture H1 au-dessus
+- PDL (support) = 3 959 $ → SHORT confirmé si clôture H1 en-dessous
+- CHoCH haussier récent @ 4 019 $ (retournement local)
+- EQL balayées @ 3 974 $ (liquidité prise)
+- EQH résistance @ 4 002 $
+- SL LONG = 3 970 $ | SL SHORT = 4 015 $
+- TP LONG : 4 250 $ puis 4 405 $
+- TP SHORT : 3 900 $ puis 3 847 $
 
-Dernières bougies H1 (6 dernières) :
-{h1_text}
+Dernières H1 :
+{h1_recent}
 
-Dernières bougies H4 (4 dernières) :
-{h4_text}
+Dernières H4 :
+{h4_recent}
 
-Dernières bougies Daily (3 dernières) :
-{daily_text}
+INSTRUCTIONS — Rédige l'analyse en respectant EXACTEMENT ce format (en français) :
 
---- INSTRUCTIONS ---
-
-Rédige une analyse complète pour le canal Telegram, en français, avec ce format EXACT :
-
-🪙 *ANALYSE Or/XAUUSD — [HEURE]h UTC*
+🪙 *Or/XAUUSD — [HEURE]h UTC*
 
 📍 *Structure de marché*
-[Décris la structure actuelle : BOS, CHoCH, tendance sur H1 et H4. Où en est-on par rapport aux niveaux clés ?]
+[2-3 phrases : tendance H4, dernier BOS/CHoCH significatif, où en est le prix par rapport aux niveaux clés]
 
-📊 *Indicateurs techniques*
-[RSI : que signifie le niveau actuel ? Surachat/survente/neutre ?]
-[EMA50 : le prix est au-dessus ou en-dessous ? Qu'est-ce que ça implique ?]
-[DXY : impact sur l'Or en ce moment ?]
+📊 *Indicateurs*
+▸ RSI : [valeur + interprétation courte]
+▸ EMA50 : [valeur + position du prix + implication]
+▸ DXY : [valeur + impact sur l'Or]
 
-🎯 *Scénarios actifs*
-🔵 LONG : [Condition de confirmation + SL + objectifs + probabilité subjective]
-🟠 SHORT : [Condition de confirmation + SL + objectifs + probabilité subjective]
+🎯 *Scénarios*
+🔵 LONG — clôture H1 > 4 115 $
+   SL : 3 970 $ | TP1 : 4 250 $ | TP2 : 4 405 $
+   [1 phrase sur les conditions favorables ou défavorables au LONG]
 
-⚡ *Confluence du moment*
-[Quels indicateurs s'alignent ? Y a-t-il un niveau Fibonacci proche ? Le biais H4 confirme-t-il un scénario ?]
+🟠 SHORT — clôture H1 < 3 959 $
+   SL : 4 015 $ | TP1 : 3 900 $ | TP2 : 3 847 $
+   [1 phrase sur les conditions favorables ou défavorables au SHORT]
 
-👁 *Ce qu'on surveille cette heure*
-[1-2 choses concrètes à observer sur le graphique pour la prochaine heure]
+⚡ *Confluence*
+[2-3 phrases : quels indicateurs s'alignent ? quel scénario a la meilleure confluence ? niveau Fibonacci proche ?]
+
+👁 *À surveiller cette heure*
+[1-2 éléments concrets et précis à observer sur le graphique]
 
 _Analyse automatisée — pas un conseil financier._
 
-Règles importantes :
-- Max 280 mots au total
-- Sois direct et précis, pas de formules vagues
-- Si le marché est indécis, dis-le clairement
-- Mentionne toujours les deux scénarios avec leurs niveaux
-- Utilise les emojis du format ci-dessus
+Règles :
+- Max 220 mots
+- Précis, concret, pas de formules vagues
+- Toujours mentionner les deux scénarios avec leurs niveaux
+- Ne jamais inventer des données non fournies
 """
+
+
+def fallback_message(spot, rsi, ema50, h4_bias, dxy, fib):
+    ema_pos = "au-dessus" if ema50 and spot > ema50 else "en-dessous"
+    fib_line = f"\n▸ Fib 0.618 : {fib['fib_618']:.0f} $ | 0.786 : {fib['fib_786']:.0f} $" if fib else ""
+    return (
+        f"📊 *Or/XAUUSD — {datetime.utcnow().strftime('%Hh')} UTC*\n\n"
+        f"▸ Prix : {spot:,.0f} $\n"
+        f"▸ RSI(14) : {rsi} | EMA50 : {ema50:.0f} $ (prix {ema_pos})\n"
+        f"▸ Biais H4 : {h4_bias} | DXY : {dxy:.2f}{fib_line}\n\n"
+        f"🎯 *Scénarios*\n"
+        f"🔵 LONG — clôture H1 > 4 115 $\n"
+        f"   SL : 3 970 $ | TP1 : 4 250 $ | TP2 : 4 405 $\n\n"
+        f"🟠 SHORT — clôture H1 < 3 959 $\n"
+        f"   SL : 4 015 $ | TP1 : 3 900 $ | TP2 : 3 847 $\n\n"
+        f"_Analyse IA indisponible — données brutes._"
+    )
 
 
 def run():
     candles_h1 = get_hourly_candles(60)
     h4_candles = get_h4_candles(30)
-    daily_candles = get_daily_candles(5)
     rsi = get_rsi(candles_h1)
     ema50 = get_ema(candles_h1, 50)
     h4_bias = get_h4_bias(h4_candles)
@@ -113,29 +123,17 @@ def run():
     dxy = get_dxy_price()
     spot = get_gold_price()
 
-    prompt = build_analysis_prompt(spot, rsi, ema50, h4_bias, fib, dxy, candles_h1, h4_candles, daily_candles)
-
     try:
+        prompt = build_prompt(spot, rsi, ema50, h4_bias, fib, dxy, candles_h1, h4_candles)
         response = get_gemini_client().models.generate_content(model=ANALYSIS_MODEL, contents=prompt)
         message = response.text
         print("Analyse Gemini générée.")
     except Exception as e:
-        # Fallback sans Gemini
-        ema_pos = "au-dessus" if ema50 and spot > ema50 else "en-dessous"
-        message = (
-            f"📊 *Or/XAUUSD — {datetime.utcnow().strftime('%H:%M')} UTC*\n\n"
-            f"Prix : {spot:,.0f} $\n"
-            f"RSI(14) : {rsi} | EMA50 : {ema50:.0f} $ (prix {ema_pos})\n"
-            f"Biais H4 : {h4_bias} | DXY : {dxy:.2f}\n\n"
-            f"Niveaux à surveiller :\n"
-            f"✅ LONG > 4 115 $ (SL 3 970, obj 4 250/4 405)\n"
-            f"⛔ SHORT < 3 959 $ (SL 4 015, obj 3 900/3 847)\n\n"
-            f"_Analyse IA indisponible — données brutes._"
-        )
-        print(f"Fallback envoyé (Gemini KO : {e})")
+        message = fallback_message(spot, rsi, ema50, h4_bias, dxy, fib)
+        print(f"Fallback (Gemini KO : {e})")
 
     send_telegram_message(message)
-    print(f"Message envoyé. Prix : {spot:.0f}$")
+    print(f"Message envoyé — Or : {spot:.0f}$")
 
 
 if __name__ == "__main__":
