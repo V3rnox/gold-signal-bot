@@ -198,6 +198,95 @@ def get_dxy_price():
         return None
 
 
+def get_h4_candles(count=30):
+    """Bougies H4 Gold pour le biais multi-timeframe."""
+    try:
+        result = _yf_chart("GC=F", "4h", "21d")
+        ts_list = result["timestamp"]
+        q = result["indicators"]["quote"][0]
+        candles = [
+            {"time": ts_list[i], "open": q["open"][i], "high": q["high"][i],
+             "low": q["low"][i], "close": q["close"][i]}
+            for i in range(len(ts_list))
+            if q["close"][i] is not None
+        ]
+        return candles[-count:]
+    except Exception:
+        return []
+
+
+def get_ema(candles, period=50):
+    """EMA(period) sur les clôtures."""
+    closes = [c["close"] for c in candles]
+    if len(closes) < period:
+        return None
+    k = 2 / (period + 1)
+    ema = sum(closes[:period]) / period
+    for price in closes[period:]:
+        ema = price * k + ema * (1 - k)
+    return round(ema, 2)
+
+
+def get_h4_bias(h4_candles):
+    """Biais H4 : bullish si prix > EMA20 H4, bearish sinon."""
+    if len(h4_candles) < 20:
+        return None
+    ema20 = get_ema(h4_candles, 20)
+    last_close = h4_candles[-1]["close"]
+    if last_close > ema20:
+        return "bullish"
+    if last_close < ema20:
+        return "bearish"
+    return "neutral"
+
+
+def get_fibonacci_levels(h1_candles, lookback=50):
+    """Niveaux Fibonacci clés depuis le dernier swing haut/bas sur H1."""
+    recent = h1_candles[-lookback:]
+    if len(recent) < 10:
+        return None
+    swing_high = max(c["high"] for c in recent)
+    swing_low = min(c["low"] for c in recent)
+    diff = swing_high - swing_low
+    return {
+        "high": round(swing_high, 0),
+        "low": round(swing_low, 0),
+        "fib_786": round(swing_high - diff * 0.786, 0),
+        "fib_618": round(swing_high - diff * 0.618, 0),
+        "fib_500": round(swing_high - diff * 0.500, 0),
+        "fib_382": round(swing_high - diff * 0.382, 0),
+    }
+
+
+def in_trading_session():
+    """True pendant Londres (07h-16h UTC) et New York (13h-21h UTC).
+    Évite les signaux en session asiatique (faible liquidité sur l'Or)."""
+    hour = datetime.utcnow().hour
+    return 7 <= hour < 21
+
+
+def ema_filter_ok(spot_price, ema50, level):
+    """LONG uniquement si prix > EMA50, SHORT uniquement si prix < EMA50."""
+    if ema50 is None:
+        return True
+    if level["direction"] == "above" and spot_price < ema50:
+        return False
+    if level["direction"] == "below" and spot_price > ema50:
+        return False
+    return True
+
+
+def h4_bias_filter_ok(h4_bias, level):
+    """Aligne le signal avec le biais H4."""
+    if h4_bias is None:
+        return True
+    if level["direction"] == "above" and h4_bias == "bearish":
+        return False
+    if level["direction"] == "below" and h4_bias == "bullish":
+        return False
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Telegram
 # ---------------------------------------------------------------------------
@@ -244,32 +333,45 @@ def rsi_filter_ok(rsi, level):
 # Analyses IA (Gemini)
 # ---------------------------------------------------------------------------
 
-def generate_hourly_analysis(rsi, dxy):
+def generate_hourly_analysis(rsi, dxy, ema50=None, h4_bias=None, fib=None):
     candles = get_hourly_candles(48)
     candles_text = "\n".join(
         f"O={c['open']:.0f} H={c['high']:.0f} L={c['low']:.0f} C={c['close']:.0f}"
         for c in candles[-12:]
     )
-    intermarket = ""
+
+    context_lines = []
     if dxy is not None:
-        intermarket = f"- DXY actuel : {dxy:.2f} (si DXY monte → pression baissière sur l'Or)\n"
+        context_lines.append(f"- DXY : {dxy:.2f} (corrélation inverse — DXY monte = Or baisse)")
     if rsi is not None:
-        intermarket += f"- RSI(14) H1 actuel : {rsi} (> 70 = surachat, < 30 = survente)\n"
+        context_lines.append(f"- RSI(14) H1 : {rsi} (>70 surachat, <30 survente)")
+    if ema50 is not None:
+        context_lines.append(f"- EMA50 H1 : {ema50:.0f} (prix au-dessus = biais haussier H1)")
+    if h4_bias is not None:
+        context_lines.append(f"- Biais H4 (EMA20 H4) : {h4_bias}")
+    if fib is not None:
+        context_lines.append(
+            f"- Fibonacci (swing {fib['high']:.0f}→{fib['low']:.0f}) : "
+            f"0.382={fib['fib_382']:.0f} | 0.500={fib['fib_500']:.0f} | "
+            f"0.618={fib['fib_618']:.0f} | 0.786={fib['fib_786']:.0f}"
+        )
+
+    context_block = "\n".join(context_lines) if context_lines else "(non disponibles)"
 
     prompt = f"""{STRATEGY_CONTEXT}
 
-Données intermarché actuelles :
-{intermarket if intermarket else '(non disponibles)'}
+Données techniques actuelles :
+{context_block}
 
 Dernières 12 bougies H1 de l'Or (les plus récentes en dernier) :
 {candles_text}
 
-Rédige une mise à jour courte (max 120 mots) pour un canal Telegram de trading, en français :
+Rédige une mise à jour courte (max 150 mots) pour un canal Telegram de trading, en français :
 - Ce qui s'est passé sur la dernière heure
-- Niveau RSI et ce que ça implique (surachat / survente / neutre)
-- Impact du DXY sur le biais Or
-- Quel scénario (LONG ou SHORT) semble le plus proche de se confirmer et pourquoi
-- Quoi surveiller ensuite
+- RSI, EMA50 et biais H4 : que disent-ils ensemble ?
+- Est-ce qu'un niveau Fibonacci clé est proche du prix actuel ?
+- Quel scénario (LONG ou SHORT) a la meilleure confluence de filtres et pourquoi
+- Quoi surveiller ensuite (niveau clé, bougie à confirmer)
 Termine toujours par : "Analyse technique automatisée, pas un conseil financier."
 """
     response = get_gemini_client().models.generate_content(model=ANALYSIS_MODEL, contents=prompt)
