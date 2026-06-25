@@ -29,6 +29,9 @@ jobs:
       - name: Installer les dépendances
         run: pip install -r telegram_bot/requirements.txt
 
+      - name: Vérifier l'installation
+        run: python -c "import requests; from google import genai; print('Packages OK')"
+
       - name: Exécuter le bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
