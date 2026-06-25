@@ -1,0 +1,45 @@
+name: Gold Signal Bot
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # toutes les 5 minutes
+  workflow_dispatch:          # déclenchement manuel pour tester
+
+jobs:
+  bot-tick:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restaurer l'état du bot
+        uses: actions/cache/restore@v4
+        with:
+          path: telegram_bot/state.json
+          key: bot-state-${{ github.run_id }}
+          restore-keys: |
+            bot-state-
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installer les dépendances
+        run: pip install -r telegram_bot/requirements.txt
+
+      - name: Exécuter le bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_CHANNEL: "@btc_signal_confirme_2026"
+          ANALYSIS_MODEL: "gemini-2.5-flash-lite"
+        run: python telegram_bot/bot_tick.py
+
+      - name: Sauvegarder l'état du bot
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: telegram_bot/state.json
+          key: bot-state-${{ github.run_id }}
