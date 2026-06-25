@@ -4,3 +4,5 @@ scripts/current.pine
 temp_*
 *.log
 discovery-log.json
+telegram_bot/state.json
+.env

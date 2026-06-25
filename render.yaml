@@ -1,0 +1,16 @@
+services:
+  - type: worker
+    name: gold-signal-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r telegram_bot/requirements.txt
+    startCommand: python telegram_bot/bot.py
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TELEGRAM_CHANNEL
+        value: "@btc_signal_confirme_2026"
+      - key: ANALYSIS_MODEL
+        value: gemini-2.5-flash-lite
